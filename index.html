@@ -1,0 +1,326 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta http-equiv="Content-Security-Policy" content="default-src 'none'; img-src https://avatars.githubusercontent.com data:; style-src 'unsafe-inline'; script-src 'unsafe-inline'; connect-src https://api.github.com; base-uri 'none'; form-action 'none'">
+<title>devboard: your GitHub repos at a glance</title>
+<meta name="description" content="A zero-dependency, single-file dashboard for any GitHub account.">
+<script>
+try {
+  var saved = localStorage.getItem('devboard.theme');
+  var dark = saved ? saved === 'dark' : matchMedia('(prefers-color-scheme: dark)').matches;
+  document.documentElement.setAttribute('data-theme', dark ? 'dark' : 'light');
+} catch (e) { document.documentElement.setAttribute('data-theme', 'dark'); }
+</script>
+<style>
+:root { --bg:#f6f8fa; --card:#fff; --text:#1f2328; --muted:#59636e; --line:#d1d9e0; --accent:#2da44e; --accent2:#0e9f9d; --chip:#eaeef2; --shadow:0 1px 3px rgba(31,35,40,.08); }
+:root[data-theme="dark"] { --bg:#0d1117; --card:#161b22; --text:#e6edf3; --muted:#8b949e; --line:#30363d; --accent:#3fb950; --accent2:#2dd4bf; --chip:#21262d; --shadow:none; }
+* { box-sizing: border-box; }
+body { margin:0; background:var(--bg); color:var(--text); font:15px/1.5 -apple-system,'Segoe UI',Helvetica,Arial,sans-serif; }
+a { color:var(--accent2); text-decoration:none; } a:hover { text-decoration:underline; }
+header { display:flex; flex-wrap:wrap; gap:12px; align-items:center; padding:14px 20px; border-bottom:1px solid var(--line); background:var(--card); position:sticky; top:0; z-index:5; }
+.brand { display:flex; align-items:center; gap:8px; font-weight:800; font-size:18px; margin-right:auto; }
+form { display:flex; flex-wrap:wrap; gap:8px; }
+input, select, button { font:inherit; color:var(--text); background:var(--bg); border:1px solid var(--line); border-radius:8px; padding:7px 11px; }
+input:focus, select:focus, button:focus-visible { outline:2px solid var(--accent2); outline-offset:1px; }
+button { cursor:pointer; } button.primary { background:linear-gradient(90deg,var(--accent),var(--accent2)); color:#fff; border:0; font-weight:600; }
+button:hover { filter:brightness(1.08); }
+main { max-width:1080px; margin:0 auto; padding:22px 16px 60px; }
+.muted { color:var(--muted); }
+#status { min-height:24px; margin:0 0 14px; } #status.err { color:#e5534b; }
+.card { background:var(--card); border:1px solid var(--line); border-radius:14px; padding:16px 18px; box-shadow:var(--shadow); }
+.card h2 { margin:0 0 12px; font-size:13px; text-transform:uppercase; letter-spacing:.06em; color:var(--muted); }
+#profile { display:flex; gap:16px; align-items:center; margin-bottom:16px; }
+#profile img { width:64px; height:64px; border-radius:50%; border:2px solid var(--accent); }
+#profile h1 { margin:0; font-size:22px; }
+.stats { display:grid; grid-template-columns:repeat(auto-fit,minmax(150px,1fr)); gap:12px; margin-bottom:16px; }
+.stat b { display:block; font-size:30px; line-height:1.1; background:linear-gradient(90deg,var(--accent),var(--accent2)); -webkit-background-clip:text; background-clip:text; color:transparent; }
+.grid { display:grid; grid-template-columns:repeat(auto-fit,minmax(300px,1fr)); gap:12px; margin-bottom:16px; }
+.wide { grid-column:1 / -1; }
+.donut { width:160px; height:160px; flex:none; } .donut-n { fill:var(--text); font-size:26px; font-weight:800; }
+.donut-wrap { display:flex; gap:18px; align-items:center; flex-wrap:wrap; }
+.legend { list-style:none; margin:0; padding:0; font-size:13px; } .legend li { display:flex; gap:8px; align-items:center; margin:3px 0; }
+.dot { width:10px; height:10px; border-radius:50%; flex:none; }
+.row { display:grid; grid-template-columns:minmax(80px,38%) 1fr 36px; gap:10px; align-items:center; margin:8px 0; font-size:13px; }
+.row a { overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+.track { height:10px; background:var(--chip); border-radius:6px; overflow:hidden; }
+.fill { height:100%; width:0; background:linear-gradient(90deg,var(--accent),var(--accent2)); border-radius:6px; transition:width .9s cubic-bezier(.2,.7,.2,1); }
+.cols { display:flex; align-items:flex-end; gap:8px; height:140px; }
+.col { flex:1; display:flex; flex-direction:column; align-items:center; justify-content:flex-end; height:100%; font-size:11px; color:var(--muted); }
+.bar { width:100%; max-width:36px; height:0; background:linear-gradient(0deg,var(--accent),var(--accent2)); border-radius:6px 6px 0 0; transition:height .9s cubic-bezier(.2,.7,.2,1); }
+.toolbar { display:flex; flex-wrap:wrap; gap:8px; align-items:center; margin-bottom:12px; } .toolbar input[type=search] { flex:1; min-width:160px; }
+.tablewrap { overflow-x:auto; } table { width:100%; border-collapse:collapse; font-size:14px; }
+th, td { text-align:left; padding:8px 10px; border-bottom:1px solid var(--line); white-space:nowrap; } th { color:var(--muted); font-weight:600; font-size:12px; text-transform:uppercase; }
+td.desc { white-space:normal; color:var(--muted); min-width:200px; } td.num { text-align:right; } th.num { text-align:right; }
+.badge { font-size:11px; padding:1px 7px; border:1px solid var(--line); border-radius:10px; color:var(--muted); margin-left:6px; }
+.skeleton { height:90px; border-radius:14px; background:linear-gradient(90deg,var(--chip),var(--card),var(--chip)); background-size:200% 100%; animation:shimmer 1.2s linear infinite; }
+@keyframes shimmer { to { background-position:-200% 0; } }
+@media (prefers-reduced-motion: reduce) { .fill, .bar { transition:none; } .skeleton { animation:none; } }
+</style>
+</head>
+<body>
+<header>
+  <div class="brand">
+    <svg width="28" height="28" viewBox="0 0 28 28" aria-hidden="true"><rect x="3" y="14" width="5" height="11" rx="2" fill="var(--accent)"/><rect x="11.5" y="7" width="5" height="18" rx="2" fill="var(--accent2)"/><rect x="20" y="3" width="5" height="22" rx="2" fill="var(--accent)"/></svg>
+    devboard
+  </div>
+  <form id="f" autocomplete="off">
+    <input id="user" placeholder="GitHub username" aria-label="GitHub username" required maxlength="39">
+    <input id="token" type="password" placeholder="Token (optional)" aria-label="GitHub token, optional" maxlength="255">
+    <button class="primary" type="submit">Load</button>
+  </form>
+  <button id="theme" type="button" aria-label="Toggle light and dark theme">Theme</button>
+</header>
+<main>
+  <p id="status" class="muted" role="status">Enter a GitHub username to build a dashboard. Everything runs in your browser.</p>
+  <section id="profile" class="card" hidden></section>
+  <section id="stats" class="stats"></section>
+  <section id="charts" class="grid" hidden>
+    <article class="card"><h2>Languages</h2><div id="donut" class="donut-wrap"></div></article>
+    <article class="card"><h2>Top repos by stars</h2><div id="top"></div></article>
+    <article class="card wide"><h2>Repos pushed per month (last 12)</h2><div id="months" class="cols"></div></article>
+  </section>
+  <section id="list" class="card" hidden>
+    <div class="toolbar">
+      <input id="q" type="search" placeholder="Search repos" aria-label="Search repos">
+      <select id="lang" aria-label="Filter by language"><option value="">All languages</option></select>
+      <select id="sort" aria-label="Sort repos"><option value="updated">Recently pushed</option><option value="stars">Most stars</option><option value="name">Name</option></select>
+      <label><input id="forks" type="checkbox"> Hide forks</label>
+      <button id="dl" type="button">Download JSON</button>
+    </div>
+    <div class="tablewrap"><table><thead><tr><th>Repository</th><th>Description</th><th>Language</th><th class="num">Stars</th><th class="num">Forks</th><th>Pushed</th></tr></thead><tbody id="rows"></tbody></table></div>
+    <p id="count" class="muted"></p>
+  </section>
+</main>
+<script>
+// <pure>
+const LANG_COLORS = { JavaScript:'#f1e05a', TypeScript:'#3178c6', Python:'#3572a5', Go:'#00add8', Rust:'#dea584', Java:'#b07219', 'C++':'#f34b7d', C:'#8a8a8a', 'C#':'#178600', HTML:'#e34c26', CSS:'#a371f7', Shell:'#89e051', Ruby:'#cc342d', PHP:'#4f5d95', Kotlin:'#a97bff', Swift:'#f05138' };
+function colorFor(name) {
+  if (LANG_COLORS[name]) return LANG_COLORS[name];
+  let h = 0;
+  for (const ch of String(name)) h = (h * 31 + ch.charCodeAt(0)) % 360;
+  return 'hsl(' + h + ' 60% 55%)';
+}
+function monthKeys(now, n) {
+  const keys = [];
+  for (let i = n - 1; i >= 0; i--) {
+    keys.push(new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth() - i, 1)).toISOString().slice(0, 7));
+  }
+  return keys;
+}
+function aggregate(repos, now) {
+  const totals = { repos: repos.length, stars: 0, forks: 0, issues: 0 };
+  const langs = new Map();
+  const keys = monthKeys(now, 12);
+  const months = new Map(keys.map(k => [k, 0]));
+  for (const r of repos) {
+    totals.stars += r.stargazers_count || 0;
+    totals.forks += r.forks_count || 0;
+    totals.issues += r.open_issues_count || 0;
+    if (r.language) langs.set(r.language, (langs.get(r.language) || 0) + 1);
+    const k = (r.pushed_at || '').slice(0, 7);
+    if (months.has(k)) months.set(k, months.get(k) + 1);
+  }
+  const languages = [...langs.entries()].sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0]));
+  const top = repos.filter(r => (r.stargazers_count || 0) > 0)
+    .sort((a, b) => b.stargazers_count - a.stargazers_count).slice(0, 6);
+  return { totals, languages, top, months: keys.map(k => [k, months.get(k)]) };
+}
+function filterRepos(repos, opts) {
+  const q = (opts.q || '').trim().toLowerCase();
+  let out = repos.filter(r =>
+    (!q || (r.name + ' ' + (r.description || '')).toLowerCase().includes(q)) &&
+    (!opts.lang || r.language === opts.lang) &&
+    (!opts.hideForks || !r.fork));
+  const by = {
+    updated: (a, b) => String(b.pushed_at).localeCompare(String(a.pushed_at)),
+    stars: (a, b) => (b.stargazers_count || 0) - (a.stargazers_count || 0),
+    name: (a, b) => a.name.localeCompare(b.name),
+  }[opts.sort || 'updated'];
+  return out.sort(by);
+}
+function timeAgo(iso, now) {
+  const s = Math.max(0, Math.floor((now - new Date(iso)) / 1000));
+  if (s < 60) return 'just now';
+  const units = [['year', 31536000], ['month', 2592000], ['day', 86400], ['hour', 3600], ['minute', 60]];
+  for (const [name, size] of units) {
+    if (s >= size) { const n = Math.floor(s / size); return n + ' ' + name + (n > 1 ? 's' : '') + ' ago'; }
+  }
+  return 'just now';
+}
+// </pure>
+
+const $ = id => document.getElementById(id);
+const reduced = matchMedia('(prefers-reduced-motion: reduce)').matches;
+const MONTHS = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+let state = { user: null, repos: [] };
+
+function el(tag, attrs, ...kids) {
+  const e = document.createElement(tag);
+  for (const [k, v] of Object.entries(attrs || {})) {
+    if (k === 'class') e.className = v; else if (k === 'text') e.textContent = v; else e.setAttribute(k, v);
+  }
+  e.append(...kids);
+  return e;
+}
+function svgEl(tag, attrs) {
+  const e = document.createElementNS('http://www.w3.org/2000/svg', tag);
+  for (const [k, v] of Object.entries(attrs)) e.setAttribute(k, v);
+  return e;
+}
+function safeUrl(u) { return typeof u === 'string' && u.startsWith('https://github.com/') ? u : '#'; }
+function store(k, v) { try { v == null ? localStorage.removeItem(k) : localStorage.setItem(k, v); } catch (e) {} }
+function load(k) { try { return localStorage.getItem(k) || ''; } catch (e) { return ''; } }
+function setStatus(msg, isErr) { const s = $('status'); s.textContent = msg; s.className = isErr ? 'err' : 'muted'; }
+
+function countUp(node, to) {
+  if (reduced || to < 2) { node.textContent = to.toLocaleString(); return; }
+  const t0 = performance.now(), dur = 900;
+  (function tick(t) {
+    const p = Math.min(1, (t - t0) / dur);
+    node.textContent = Math.round(to * (1 - Math.pow(1 - p, 3))).toLocaleString();
+    if (p < 1) requestAnimationFrame(tick);
+  })(t0);
+}
+function afterPaint(fn) { requestAnimationFrame(() => requestAnimationFrame(fn)); }
+
+async function gh(path, token) {
+  const headers = { Accept: 'application/vnd.github+json' };
+  if (token) headers.Authorization = 'Bearer ' + token;
+  const res = await fetch('https://api.github.com' + path, { headers });
+  if (res.status === 404) throw new Error('User not found.');
+  if (res.status === 403 || res.status === 429) {
+    const reset = res.headers.get('x-ratelimit-reset');
+    throw new Error('GitHub rate limit reached' + (reset ? '. Resets at ' + new Date(reset * 1000).toLocaleTimeString() : '') + '. Adding a token raises the limit.');
+  }
+  if (!res.ok) throw new Error('GitHub API error ' + res.status + '.');
+  return res.json();
+}
+
+function renderProfile(u) {
+  const box = $('profile'); box.replaceChildren();
+  const avatar = typeof u.avatar_url === 'string' && u.avatar_url.startsWith('https://avatars.githubusercontent.com/') ? u.avatar_url : '';
+  if (avatar) box.append(el('img', { src: avatar, alt: '', width: 64, height: 64 }));
+  const info = el('div', {}, el('h1', { text: u.name || u.login }),
+    el('a', { href: safeUrl(u.html_url), rel: 'noopener noreferrer', text: '@' + u.login }));
+  if (u.bio) info.append(el('div', { class: 'muted', text: u.bio }));
+  box.append(info); box.hidden = false;
+}
+function renderStats(totals, followers) {
+  const box = $('stats'); box.replaceChildren();
+  for (const [label, value] of [['Repositories', totals.repos], ['Stars earned', totals.stars], ['Forks', totals.forks], ['Followers', followers]]) {
+    const b = el('b', { text: '0' });
+    box.append(el('div', { class: 'card stat' }, b, el('span', { class: 'muted', text: label })));
+    countUp(b, value);
+  }
+}
+function renderDonut(languages) {
+  const box = $('donut'); box.replaceChildren();
+  if (!languages.length) { box.append(el('p', { class: 'muted', text: 'No language data.' })); return; }
+  const total = languages.reduce((s, [, n]) => s + n, 0);
+  const items = languages.slice(0, 6);
+  const rest = languages.slice(6).reduce((s, [, n]) => s + n, 0);
+  if (rest) items.push(['Other', rest]);
+  const R = 60, C = 2 * Math.PI * R;
+  const svg = svgEl('svg', { viewBox: '0 0 160 160', class: 'donut', role: 'img', 'aria-label': 'Languages by repository count' });
+  svg.append(svgEl('circle', { cx: 80, cy: 80, r: R, fill: 'none', stroke: 'var(--chip)', 'stroke-width': 22 }));
+  const segs = []; let acc = 0;
+  const legend = el('ul', { class: 'legend' });
+  for (const [name, n] of items) {
+    const len = n / total * C;
+    const c = svgEl('circle', { cx: 80, cy: 80, r: R, fill: 'none', stroke: colorFor(name), 'stroke-width': 22,
+      'stroke-dasharray': reduced ? len + ' ' + (C - len) : '0 ' + C, 'stroke-dashoffset': -acc, transform: 'rotate(-90 80 80)' });
+    if (!reduced) c.style.transition = 'stroke-dasharray .9s cubic-bezier(.2,.7,.2,1)';
+    svg.append(c); segs.push([c, len]); acc += len;
+    const dot = el('span', { class: 'dot' }); dot.style.background = colorFor(name);
+    legend.append(el('li', {}, dot, el('span', { text: name + ' (' + n + ')' })));
+  }
+  const t = svgEl('text', { x: 80, y: 88, 'text-anchor': 'middle', class: 'donut-n' }); t.textContent = String(total);
+  svg.append(t); box.append(svg, legend);
+  if (!reduced) afterPaint(() => segs.forEach(([c, len]) => c.setAttribute('stroke-dasharray', len + ' ' + (C - len))));
+}
+function renderTop(top) {
+  const box = $('top'); box.replaceChildren();
+  if (!top.length) { box.append(el('p', { class: 'muted', text: 'No starred repositories yet.' })); return; }
+  const max = top[0].stargazers_count, fills = [];
+  for (const r of top) {
+    const fill = el('div', { class: 'fill' });
+    fills.push([fill, r.stargazers_count / max * 100]);
+    box.append(el('div', { class: 'row' }, el('a', { href: safeUrl(r.html_url), rel: 'noopener noreferrer', text: r.name }),
+      el('div', { class: 'track' }, fill), el('span', { class: 'muted', text: String(r.stargazers_count) })));
+  }
+  afterPaint(() => fills.forEach(([f, pct]) => { f.style.width = pct + '%'; }));
+}
+function renderMonths(months) {
+  const box = $('months'); box.replaceChildren();
+  const max = Math.max(1, ...months.map(([, n]) => n)), bars = [];
+  for (const [key, n] of months) {
+    const bar = el('div', { class: 'bar', title: n + ' repos pushed in ' + key });
+    bars.push([bar, n / max * 100]);
+    box.append(el('div', { class: 'col' }, el('span', { text: n ? String(n) : '' }), bar, el('span', { text: MONTHS[+key.slice(5) - 1] })));
+  }
+  afterPaint(() => bars.forEach(([b, pct]) => { b.style.height = pct + '%'; }));
+}
+function renderRows() {
+  const opts = { q: $('q').value, lang: $('lang').value, hideForks: $('forks').checked, sort: $('sort').value };
+  const rows = filterRepos(state.repos, opts), body = $('rows'), now = new Date();
+  body.replaceChildren();
+  for (const r of rows) {
+    const name = el('td', {}, el('a', { href: safeUrl(r.html_url), rel: 'noopener noreferrer', text: r.name }));
+    if (r.fork) name.append(el('span', { class: 'badge', text: 'fork' }));
+    body.append(el('tr', {}, name, el('td', { class: 'desc', text: r.description || '' }), el('td', { text: r.language || '' }),
+      el('td', { class: 'num', text: String(r.stargazers_count || 0) }), el('td', { class: 'num', text: String(r.forks_count || 0) }),
+      el('td', { text: r.pushed_at ? timeAgo(r.pushed_at, now) : '' })));
+  }
+  $('count').textContent = rows.length + ' of ' + state.repos.length + ' repositories';
+}
+function renderAll(user, repos) {
+  const agg = aggregate(repos, new Date());
+  state = { user, repos };
+  renderProfile(user); renderStats(agg.totals, user.followers || 0);
+  renderDonut(agg.languages); renderTop(agg.top); renderMonths(agg.months);
+  const sel = $('lang'); sel.replaceChildren(el('option', { value: '', text: 'All languages' }));
+  for (const [name] of agg.languages) sel.append(el('option', { value: name, text: name }));
+  $('charts').hidden = false; $('list').hidden = false; renderRows();
+}
+
+async function run(name) {
+  name = name.trim();
+  if (!/^[A-Za-z0-9](?:[A-Za-z0-9-]{0,38})$/.test(name)) { setStatus('Enter a valid GitHub username.', true); return; }
+  const token = $('token').value.trim() || null;
+  setStatus('Loading ' + name + '...');
+  $('stats').replaceChildren(el('div', { class: 'skeleton' }), el('div', { class: 'skeleton' }), el('div', { class: 'skeleton' }), el('div', { class: 'skeleton' }));
+  try {
+    const user = await gh('/users/' + encodeURIComponent(name), token);
+    let repos = [];
+    for (let page = 1; page <= 3; page++) {
+      const batch = await gh('/users/' + encodeURIComponent(name) + '/repos?per_page=100&sort=pushed&page=' + page, token);
+      repos = repos.concat(batch);
+      if (batch.length < 100) break;
+    }
+    renderAll(user, repos);
+    store('devboard.user', user.login);
+    setStatus('Showing ' + repos.length + ' public repositories for ' + user.login + '.');
+  } catch (err) {
+    $('stats').replaceChildren(); $('profile').hidden = $('charts').hidden = $('list').hidden = true;
+    setStatus(err.message || 'Something went wrong.', true);
+  }
+}
+
+$('f').addEventListener('submit', e => { e.preventDefault(); history.replaceState(null, '', '?user=' + encodeURIComponent($('user').value.trim())); run($('user').value); });
+['q', 'lang', 'sort', 'forks'].forEach(id => $(id).addEventListener('input', renderRows));
+$('theme').addEventListener('click', () => {
+  const next = document.documentElement.getAttribute('data-theme') === 'dark' ? 'light' : 'dark';
+  document.documentElement.setAttribute('data-theme', next); store('devboard.theme', next);
+});
+$('dl').addEventListener('click', () => {
+  const blob = new Blob([JSON.stringify(state.repos, null, 2)], { type: 'application/json' });
+  const a = el('a', { href: URL.createObjectURL(blob), download: (state.user ? state.user.login : 'repos') + '-repos.json' });
+  a.click(); setTimeout(() => URL.revokeObjectURL(a.href), 1000);
+});
+const initial = new URLSearchParams(location.search).get('user') || load('devboard.user');
+if (initial) { $('user').value = initial; run(initial); }
+</script>
+</body>
+</html>
